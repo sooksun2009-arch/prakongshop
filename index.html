@@ -287,7 +287,7 @@ input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(2
   <div class="sidebar-logo">
     <div class="logo-icon">🏪</div>
     <div>
-      <div class="logo-text">ร้าน ยายคอง</div>
+      <div class="logo-text">ร้านชำ Pro</div>
       <div class="logo-sub">Firebase + Sheets</div>
     </div>
   </div>
@@ -406,12 +406,34 @@ input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(2
         <div class="card" style="margin-bottom:14px;">
           <div class="card-header"><div class="card-title">🚚 เพิ่มรายการรับสินค้า</div></div>
           <div class="card-body">
+            <!-- ค้นหาสินค้า: พิมพ์ชื่อ หรือ สแกนบาร์โค้ด -->
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>ค้นหาสินค้า</label>
+              <div style="display:flex;gap:6px;">
+                <div style="position:relative;flex:1;">
+                  <input type="text" id="receive-search" placeholder="พิมพ์ชื่อสินค้า..." oninput="filterReceiveProducts()" autocomplete="off" style="width:100%;">
+                  <div id="receive-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);box-shadow:var(--shadow-lg);z-index:200;max-height:200px;overflow-y:auto;"></div>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm" onclick="openReceiveScanner()" style="white-space:nowrap;flex-shrink:0;">📷 สแกน</button>
+              </div>
+            </div>
+            <!-- สินค้าที่เลือก -->
+            <div id="receive-selected-product" style="display:none;background:var(--success-light);border:1px solid var(--success);border-radius:var(--radius);padding:8px 12px;margin-bottom:10px;display:none;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span id="receive-selected-emoji" style="font-size:20px;">📦</span>
+                <div>
+                  <div id="receive-selected-name" style="font-weight:600;font-size:13.5px;"></div>
+                  <div id="receive-selected-info" style="font-size:11px;color:var(--text2);"></div>
+                </div>
+              </div>
+              <button type="button" class="btn btn-outline btn-sm" onclick="clearReceiveProduct()">✕ เปลี่ยน</button>
+            </div>
+            <input type="hidden" id="receive-product-id">
             <div class="form-grid" style="margin-bottom:10px;">
-              <div class="form-group" style="margin-bottom:0"><label>เลือกสินค้า</label><select id="receive-product"><option value="">-- เลือกสินค้า --</option></select></div>
               <div class="form-group" style="margin-bottom:0"><label>จำนวนที่รับ</label><input type="number" id="receive-qty" placeholder="0" min="1"></div>
+              <div class="form-group" style="margin-bottom:0"><label>ราคาทุน/ชิ้น (฿)</label><input type="number" id="receive-cost" placeholder="0.00" step="0.01"></div>
             </div>
             <div class="form-grid" style="margin-bottom:10px;">
-              <div class="form-group" style="margin-bottom:0"><label>ราคาทุน/ชิ้น (฿)</label><input type="number" id="receive-cost" placeholder="0.00" step="0.01"></div>
               <div class="form-group" style="margin-bottom:0"><label>ซัพพลายเออร์ / หมายเหตุ</label><input type="text" id="receive-supplier" placeholder="ชื่อร้านที่ซื้อ..."></div>
             </div>
             <!-- วิธีชำระ -->
@@ -1206,16 +1228,59 @@ function setReceivePayMethod(method){
 }
 
 function populateReceiveSelect(){
-  const el=document.getElementById('receive-product');
-  el.innerHTML='<option value="">-- เลือกสินค้า --</option>'+state.products.map(p=>`<option value="${p.id}">${p.emoji||'📦'} ${p.name} (สต็อก: ${p.stock})</option>`).join('');
+  // ไม่ต้องทำอะไร — ใช้ search แทน dropdown แล้ว
 }
 
+function filterReceiveProducts(){
+  const q = document.getElementById('receive-search').value.trim().toLowerCase();
+  const dd = document.getElementById('receive-dropdown');
+  if (!q) { dd.style.display='none'; return; }
+  const matches = state.products.filter(p =>
+    p.name.toLowerCase().includes(q) || (p.barcode||'').includes(q)
+  ).slice(0, 8);
+  if (!matches.length) { dd.innerHTML='<div style="padding:10px 12px;color:var(--text3);font-size:13px;">ไม่พบสินค้า</div>'; dd.style.display='block'; return; }
+  dd.innerHTML = matches.map(p => `
+    <div onclick="selectReceiveProduct(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <span style="font-size:18px;">${p.emoji||'📦'}</span>
+      <div><div style="font-weight:500;">${p.name}</div><div style="font-size:11px;color:var(--text3);">บาร์โค้ด: ${p.barcode||'-'} | สต็อก: ${p.stock} ${p.unit}</div></div>
+    </div>`).join('');
+  dd.style.display='block';
+}
+
+function selectReceiveProduct(p){
+  document.getElementById('receive-product-id').value = p.id;
+  document.getElementById('receive-search').value = '';
+  document.getElementById('receive-dropdown').style.display = 'none';
+  document.getElementById('receive-selected-emoji').textContent = p.emoji||'📦';
+  document.getElementById('receive-selected-name').textContent = p.name;
+  document.getElementById('receive-selected-info').textContent = `บาร์โค้ด: ${p.barcode||'-'} | สต็อกปัจจุบัน: ${p.stock} ${p.unit} | ราคาทุนเดิม: ฿${p.cost}`;
+  // ใส่ราคาทุนเดิมให้อัตโนมัติ
+  document.getElementById('receive-cost').value = p.cost;
+  const sel = document.getElementById('receive-selected-product');
+  sel.style.display = 'flex';
+}
+
+function clearReceiveProduct(){
+  document.getElementById('receive-product-id').value='';
+  document.getElementById('receive-selected-product').style.display='none';
+  document.getElementById('receive-search').value='';
+  document.getElementById('receive-cost').value='';
+}
+
+// ปิด dropdown เมื่อคลิกที่อื่น
+document.addEventListener('click', e => {
+  if (!e.target.closest('#receive-search') && !e.target.closest('#receive-dropdown')) {
+    const dd = document.getElementById('receive-dropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
+
 function addReceiveItem(){
-  const pid=parseInt(document.getElementById('receive-product').value);
+  const pid=parseInt(document.getElementById('receive-product-id').value);
   const qty=parseInt(document.getElementById('receive-qty').value);
   const cost=parseFloat(document.getElementById('receive-cost').value);
   const supplier=document.getElementById('receive-supplier').value;
-  if(!pid){showToast('กรุณาเลือกสินค้า','error');return;}
+  if(!pid){showToast('กรุณาเลือกสินค้าก่อน','error');return;}
   if(!qty||qty<=0){showToast('กรุณากรอกจำนวน','error');return;}
   if(!cost||cost<=0){showToast('กรุณากรอกราคาทุน','error');return;}
   if(receivePayMethod==='credit'&&!document.getElementById('receive-creditor').value.trim()){showToast('กรุณากรอกชื่อเจ้าหนี้','error');return;}
@@ -1226,7 +1291,8 @@ function addReceiveItem(){
     creditorName:document.getElementById('receive-creditor').value.trim(),
     dueDate:document.getElementById('receive-due').value
   });
-  ['receive-qty','receive-cost','receive-supplier','receive-creditor','receive-due'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  clearReceiveProduct();
+  ['receive-qty','receive-supplier','receive-creditor','receive-due'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderPendingReceive();
 }
 
@@ -1511,6 +1577,15 @@ async function openBarcodeScanner() {
   setTimeout(() => startCamera(), 300);
 }
 
+async function openReceiveScanner() {
+  cameraMode = 'receive';
+  document.getElementById('camera-modal-title').textContent = '📷 สแกนบาร์โค้ดรับสินค้า';
+  document.getElementById('camera-modal-hint').textContent = 'จ่อกล้องที่บาร์โค้ดสินค้าที่รับเข้า';
+  document.getElementById('camera-modal').classList.add('open');
+  document.getElementById('scan-status').textContent = 'กำลังเปิดกล้อง...';
+  setTimeout(() => startCamera(), 300);
+}
+
 async function startCamera() {
   stopBarcodeLoop();
   const video = document.getElementById('scanner-video');
@@ -1566,6 +1641,14 @@ function startBarcodeLoop() {
             }
             document.getElementById('p-barcode').value = code;
             showToast(`ได้บาร์โค้ด: ${code}`, 'success');
+          } else if (cameraMode === 'receive') {
+            const p = state.products.find(x => x.barcode === code);
+            if (!p) {
+              document.getElementById('scan-status').textContent = `⚠️ ไม่พบสินค้าบาร์โค้ด: ${code}`;
+              scanLoopId = requestAnimationFrame(loop); return;
+            }
+            selectReceiveProduct(p);
+            showToast(`เลือกสินค้า: ${p.name}`, 'success');
           } else {
             handleScanResult(code);
           }
